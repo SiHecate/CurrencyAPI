@@ -1,0 +1,20 @@
+Currency API Key: dBk5sfqnNYRABuFPQds8tQq8Crs5cR
+
+Api Request example
+
+https://www.amdoren.com/api/currency.php?api_key=dBk5sfqnNYRABuFPQds8tQq8Crs5cR&from=USD&to=EUR
+
+USD to TRY
+https://www.amdoren.com/api/currency.php?api_key=dBk5sfqnNYRABuFPQds8tQq8Crs5cR&from=USD&to=TRY
+
+0	No error.
+100	API key not provided.
+110	Invalid API key.
+200	From currency not provided.
+210	Invalid from currency.
+250	To currency not provided.
+260	Invalid to currency.
+300	Amount must be numeric.
+310	Invalid amount.
+320	Amount cannot be zero.
+400	API limit reached for the month.
