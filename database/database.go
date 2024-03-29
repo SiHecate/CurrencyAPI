@@ -1,6 +1,7 @@
 package database
 
 import (
+	"Currency/model"
 	"fmt"
 	"os"
 
@@ -12,6 +13,7 @@ var Conn *gorm.DB
 
 func Connect() {
 	database()
+	migration()
 }
 
 func database() {
@@ -30,4 +32,8 @@ func database() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func migration() {
+	Conn.AutoMigrate(&model.Currency{})
 }

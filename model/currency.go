@@ -1,5 +1,7 @@
 package model
 
+import "gorm.io/gorm"
+
 /*
 	{
 	"data": {
@@ -21,4 +23,15 @@ type CurrencyResponse struct {
 type CurrencyError struct {
 	ErrorCode    int    `json:"error_code"`
 	ErrorMessage string `json:"error_message"`
+}
+
+type Currency struct {
+	gorm.Model
+	EUR float64 `json:"eur"`
+	GBP float64 `json:"gbp"`
+	JPY float64 `json:"jpy"`
+	KRW float64 `json:"krw"`
+	PLN float64 `json:"pln"`
+	RUB float64 `json:"rub"`
+	USD float64 `json:"usd"`
 }
