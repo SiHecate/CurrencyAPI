@@ -11,11 +11,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: app
+    container_name: Currency_golang_app
     ports:
       - 8080:8080
+    depends_on:
+      - postgres
     volumes:
       - .:/app
-      
+
+  postgres:
+    networks:
+      - currency
+    image: postgres:latest
+    container_name: Currency_golang_postgresql
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5436:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+
 volumes:
   db:

@@ -1,7 +1,7 @@
 FROM golang:1.22
 WORKDIR /app
+RUN go install github.com/cosmtrek/air@latest
+RUN git config --global --add safe.directory /app # git config for air
 COPY go.mod go.sum ./
 RUN go mod download
-COPY *.go ./
-
-CMD ["go", "run", "main.go"]
+CMD ["air", "-c", ".air.toml"]
