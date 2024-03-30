@@ -4,6 +4,8 @@ import (
 	"Currency/database"
 	"Currency/model"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"time"
@@ -31,7 +33,6 @@ func main() {
 
 	router(app)
 	websocketHandler(app)
-
 	log.Fatal(app.Listen(":8080"))
 }
 
@@ -77,22 +78,31 @@ func websocketHandler(app *fiber.App) {
 	Websocket'i database ile birlikte kullanarak, database'e kaydedeceğiz herhangi bir dışarıdan isteğe açık olmamalı ve sadece websocket üzerinden database'e kayıt yapılmalıdır.
 */
 
-func WSSaveCurrencyToDatabase(ws *websocket.Conn) {
-
-	ws.WriteJSON("Döviz kurları güncelleniyor2...")
-
+func WSSaveCurrencyToDatabase(ws *websocket.Conn) error {
 	for {
 		currentTime := time.Now()
-		if err := database.Conn.FirstOrCreate(&model.Currency{}).Error; err != nil {
-			lastUpdatedTime := model.Currency{}.UpdatedAt
-			timeRemain := 10 - currentTime.Sub(lastUpdatedTime).Minutes()
-			ws.WriteJSON(timeRemain)
-			if timeRemain >= 10 {
-				ws.WriteJSON("Döviz kurları güncelleniyor...")
-				SaveCurrencyToDatabase()
-			} else {
-				time.Sleep(time.Duration(timeRemain) * time.Minute)
-			}
+		if ws == nil {
+			fmt.Println("WebSocket bağlantısı hala başlatılmamış.")
+			return errors.New("WebSocket bağlantısı başlatılmadı")
+		}
+
+		var existingCurrency model.Currency
+		if err := database.Conn.First(&existingCurrency).Error; err != nil {
+			fmt.Println("Para birimi bulunamadı. Hata:", err)
+			continue
+		}
+
+		lastUpdatedTime := existingCurrency.UpdatedAt
+		timeRemain := 10 - currentTime.Sub(lastUpdatedTime).Minutes()
+
+		if timeRemain <= 0 {
+			SaveCurrencyToDatabase()
+			ws.WriteJSON("Döviz kurları güncellendi")
+			ws.WriteJSON(existingCurrency)
+			CurrencyConvertor()
+		} else {
+			ws.WriteJSON("Döviz kurları güncellenmesine kalan süre: " + fmt.Sprintf("%f", timeRemain) + " dakika")
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
@@ -126,6 +136,7 @@ func SaveCurrencyToDatabase() {
 		log.Fatal(currencyError)
 	}
 
+	// API Tarafından gelen döviz kurları
 	currency := model.Currency{
 		EUR: currencyResp.Data["EUR"],
 		GBP: currencyResp.Data["GBP"],
@@ -137,15 +148,49 @@ func SaveCurrencyToDatabase() {
 	}
 
 	// Para birimlerinin database içerisinde olup olmadığına göre ilk kaydın yapılması eğer varsa güncellenmesi
-	if err := database.Conn.First(&model.Currency{}).Error; err != nil {
+	var existingCurrency model.Currency
+	if err := database.Conn.First(&existingCurrency).Error; err != nil {
 		if err := database.Conn.Create(&currency).Error; err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		if err := database.Conn.Model(&model.Currency{}).Updates(&currency).Error; err != nil {
+		if err := database.Conn.Model(&existingCurrency).Updates(&currency).Error; err != nil {
 			log.Fatal(err)
 		}
 	}
+}
+
+func CurrencyConvertor() {
+	var existingCurrency model.Currency
+	if err := database.Conn.First(&existingCurrency).Error; err != nil {
+		log.Fatal(err)
+	}
+
+	currencies := map[string]float64{
+		"EUR": existingCurrency.EUR,
+		"GBP": existingCurrency.GBP,
+		"JPY": existingCurrency.JPY,
+		"KRW": existingCurrency.KRW,
+		"PLN": existingCurrency.PLN,
+		"RUB": existingCurrency.RUB,
+		"USD": existingCurrency.USD,
+	}
+
+	turkishCurrencies := make(map[string]float64)
+	for currency, value := range currencies {
+		turkishValue := 1 / value
+		turkishCurrencies[currency] = turkishValue
+		database.Conn.Model(&existingCurrency).Update(currency, turkishValue)
+	}
+
+	fmt.Println("1 Dolar =", turkishCurrencies["USD"], "Türk Lirası")
+	fmt.Println("1 Euro =", turkishCurrencies["EUR"], "Türk Lirası")
+	fmt.Println("1 Pound =", turkishCurrencies["GBP"], "Türk Lirası")
+	fmt.Println("1 Japon Yeni =", turkishCurrencies["JPY"], "Türk Lirası")
+	fmt.Println("1 Kore Wonu =", turkishCurrencies["KRW"], "Türk Lirası")
+	fmt.Println("1 Polonya Zlotisi =", turkishCurrencies["PLN"], "Türk Lirası")
+	fmt.Println("1 Rus Rublesi =", turkishCurrencies["RUB"], "Türk Lirası")
+
 }
 
 // Döviz kurlarının database içerisinden getirilmesi fonksiyonu
