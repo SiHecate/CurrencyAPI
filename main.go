@@ -36,6 +36,7 @@ func main() {
 	log.Fatal(app.Listen(":8080"))
 }
 
+// Router handler
 func router(app *fiber.App) {
 	// Route definitions
 	app.Get("/currency", CurrencyHandler)
@@ -44,10 +45,7 @@ func router(app *fiber.App) {
 	})
 }
 
-func trying(ws *websocket.Conn) {
-	ws.WriteJSON("Döviz kurları güncelleniyor...")
-}
-
+// Websocket handler
 func websocketHandler(app *fiber.App) {
 	app.Use("/ws", func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
@@ -59,25 +57,23 @@ func websocketHandler(app *fiber.App) {
 
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
 		if c.Locals("allowed") == true {
-			trying(c)
 			WSSaveCurrencyToDatabase(c)
 		}
 	}))
 }
 
 /*
-	Algoritma konsepti:
-	JS Tarafından Golang API'ya istek atarken istekte istenilen döviz cinsini belirtmek gerekmektedir.
-	Örneğin EUR döviz cinsi için istek atıldığında, API tarafından EUR döviz kuru döndürülecektir.
+Algoritma konsepti:
+JS Tarafından Golang API'ya istek atarken istekte istenilen döviz cinsini belirtmek gerekmektedir.
+Örneğin EUR döviz cinsi için istek atıldığında, API tarafından EUR döviz kuru döndürülecektir.
 
-	Kullanılan API aylık olarak 5000 istek hakkı sunmaktadır. Bu nedenle aylık 5000 istek hakkı aşılmamalıdır. Bunun içinde 10 dakikada bir gelen döviz kurlarını database'e kaydedip kullanıcıya döviz kurlarını database üzerinden sunabiliriz.
+Kullanılan API aylık olarak 5000 istek hakkı sunmaktadır. Bu nedenle aylık 5000 istek hakkı aşılmamalıdır. Bunun içinde 10 dakikada bir gelen döviz kurlarını database'e kaydedip kullanıcıya döviz kurlarını database üzerinden sunabiliriz.
 
-	Websocket yardımı ile 10 dakika bir döviz kurlarını güncelleyebiliriz.
-	Bu da ortalama olarak günde 144 istek yapmamıza olanak sağlar. Ayda 4320 istek yapmış oluruz. Bu sayede aylık 5000 istek hakkımızı aşmamış oluruz.
+Websocket yardımı ile 10 dakika bir döviz kurlarını güncelleyebiliriz.
+Bu da ortalama olarak günde 144 istek yapmamıza olanak sağlar. Ayda 4320 istek yapmış oluruz. Bu sayede aylık 5000 istek hakkımızı aşmamış oluruz.
 
-	Websocket'i database ile birlikte kullanarak, database'e kaydedeceğiz herhangi bir dışarıdan isteğe açık olmamalı ve sadece websocket üzerinden database'e kayıt yapılmalıdır.
+Websocket'i database ile birlikte kullanarak, database'e kaydedeceğiz herhangi bir dışarıdan isteğe açık olmamalı ve sadece websocket üzerinden database'e kayıt yapılmalıdır.
 */
-
 func WSSaveCurrencyToDatabase(ws *websocket.Conn) error {
 	for {
 		currentTime := time.Now()
@@ -160,12 +156,12 @@ func SaveCurrencyToDatabase() {
 	}
 }
 
+// Para birimlerinin TL'ye çevrilmesi fonksiyonu
 func CurrencyConvertor() {
 	var existingCurrency model.Currency
 	if err := database.Conn.First(&existingCurrency).Error; err != nil {
 		log.Fatal(err)
 	}
-
 	currencies := map[string]float64{
 		"EUR": existingCurrency.EUR,
 		"GBP": existingCurrency.GBP,
@@ -175,22 +171,12 @@ func CurrencyConvertor() {
 		"RUB": existingCurrency.RUB,
 		"USD": existingCurrency.USD,
 	}
-
 	turkishCurrencies := make(map[string]float64)
 	for currency, value := range currencies {
 		turkishValue := 1 / value
 		turkishCurrencies[currency] = turkishValue
 		database.Conn.Model(&existingCurrency).Update(currency, turkishValue)
 	}
-
-	fmt.Println("1 Dolar =", turkishCurrencies["USD"], "Türk Lirası")
-	fmt.Println("1 Euro =", turkishCurrencies["EUR"], "Türk Lirası")
-	fmt.Println("1 Pound =", turkishCurrencies["GBP"], "Türk Lirası")
-	fmt.Println("1 Japon Yeni =", turkishCurrencies["JPY"], "Türk Lirası")
-	fmt.Println("1 Kore Wonu =", turkishCurrencies["KRW"], "Türk Lirası")
-	fmt.Println("1 Polonya Zlotisi =", turkishCurrencies["PLN"], "Türk Lirası")
-	fmt.Println("1 Rus Rublesi =", turkishCurrencies["RUB"], "Türk Lirası")
-
 }
 
 // Döviz kurlarının database içerisinden getirilmesi fonksiyonu
@@ -202,5 +188,25 @@ func CurrencyHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(currency)
+	type CurrencyResponse struct {
+		USD float64 `json:"usd"`
+		EUR float64 `json:"eur"`
+		GBP float64 `json:"gbp"`
+		PLN float64 `json:"pln"`
+		RUB float64 `json:"rub"`
+		JPY float64 `json:"jpy"`
+		KRW float64 `json:"krw"`
+	}
+
+	response := CurrencyResponse{
+		USD: currency.USD,
+		EUR: currency.EUR,
+		GBP: currency.GBP,
+		PLN: currency.PLN,
+		RUB: currency.RUB,
+		JPY: currency.JPY,
+		KRW: currency.KRW,
+	}
+
+	return c.JSON(response)
 }
