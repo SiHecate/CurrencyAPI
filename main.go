@@ -3,6 +3,8 @@ package main
 import (
 	"Currency/database"
 	"Currency/model"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/websocket/v2"
@@ -36,13 +39,22 @@ func main() {
 	log.Fatal(app.Listen(":8080"))
 }
 
-// Router handler
 func router(app *fiber.App) {
-	// Route definitions
-	app.Get("/currency", CurrencyHandler)
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "*",
+		AllowHeaders:     "Origin, Content-Type, Accept",
+		AllowMethods:     "GET, POST, PATCH, DELETE",
+		AllowCredentials: false,
+	}))
+
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
+		return c.SendString("Hello from Currency API! This is only for my personal use.")
 	})
+
+	app.Use(TokenCheck)
+	app.Get("/currency", CurrencyHandler)
+	app.Get("/token", TokenCreate)
+	app.Get("/tokens", TokenList)
 }
 
 // Websocket handler
@@ -209,4 +221,57 @@ func CurrencyHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(response)
+}
+
+func TokenCreate(c *fiber.Ctx) error {
+	token := TokenGenerator()
+	return c.JSON(fiber.Map{
+		"token": token,
+	})
+}
+
+func TokenGenerator() string {
+	newToken := make([]byte, 12)
+	_, err := rand.Read(newToken)
+	if err != nil {
+		log.Fatalf("Rastgele token oluşturulurken bir hata oluştu: %v", err)
+	}
+	tokenHex := hex.EncodeToString(newToken)
+
+	if err := database.Conn.Create(&model.Token{Token: tokenHex}).Error; err != nil {
+		log.Fatalf("Token database'e kaydedilirken bir hata oluştu: %v", err)
+	}
+
+	fmt.Println("Token:", tokenHex)
+	return tokenHex
+}
+
+func TokenList(c *fiber.Ctx) error {
+	var tokens []model.Token
+	if err := database.Conn.Find(&tokens).Error; err != nil {
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{
+			"error": "Token not found",
+		})
+	}
+
+	return c.JSON(tokens)
+}
+
+// Token middleware
+func TokenCheck(c *fiber.Ctx) error {
+	token := c.Query("token")
+	if token == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": "Token not found",
+		})
+	}
+
+	var dbToken model.Token
+	if err := database.Conn.Where("token = ?", token).First(&dbToken).Error; err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid token",
+		})
+	}
+
+	return c.Next()
 }

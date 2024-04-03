@@ -35,5 +35,5 @@ func database() {
 }
 
 func migration() {
-	Conn.AutoMigrate(&model.Currency{})
+	Conn.AutoMigrate(&model.Currency{}, &model.Token{})
 }
