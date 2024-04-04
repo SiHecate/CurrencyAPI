@@ -11,12 +11,7 @@ import (
 
 var Conn *gorm.DB
 
-func Connect() {
-	database()
-	migration()
-}
-
-func database() {
+func Database() {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s dbname=%s user=%s password=%s sslmode=disable TimeZone=%s",
 		os.Getenv("DB_HOST"),
@@ -32,8 +27,10 @@ func database() {
 	if err != nil {
 		panic(err)
 	}
+
+	Migration()
 }
 
-func migration() {
+func Migration() {
 	Conn.AutoMigrate(&model.Currency{}, &model.Token{})
 }
