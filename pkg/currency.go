@@ -15,13 +15,21 @@ import (
 	"github.com/gofiber/websocket/v2"
 )
 
-type CurrencyService struct{}
-
-func NewCurrencyService() CurrencyService {
-	return CurrencyService{}
+type CurrencyService interface {
+	Updater(ws *websocket.Conn) error
+	CurrencySave()
+	CurrencyConvertor()
+	CurrencyHandler(c *fiber.Ctx) error
 }
 
-func (s *CurrencyService) WSSaveCurrencyToDatabase(ws *websocket.Conn) error {
+type currencyService struct{}
+
+func NewCurrencyService() CurrencyService {
+	return &currencyService{}
+}
+
+// Updater fonksiyonu döviz kurlarını güncellemek için kullanılır.
+func (s *currencyService) Updater(ws *websocket.Conn) error {
 	for {
 		currentTime := time.Now()
 		if ws == nil {
@@ -39,19 +47,19 @@ func (s *CurrencyService) WSSaveCurrencyToDatabase(ws *websocket.Conn) error {
 		timeRemain := 10 - currentTime.Sub(lastUpdatedTime).Minutes()
 
 		if timeRemain <= 0 {
-			s.SaveCurrencyToDatabase()
+			s.CurrencySave()
 			ws.WriteJSON("Döviz kurları güncellendi")
 			ws.WriteJSON(existingCurrency)
 			s.CurrencyConvertor()
 		} else {
-			ws.WriteJSON("Döviz kurları güncellenmesine kalan süre: " + fmt.Sprintf("%f", timeRemain) + " dakika")
+			ws.WriteJSON(fmt.Sprintf("Döviz kurları güncellenmesine kalan süre: %f dakika", timeRemain))
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-// Para birimlerinin database'e kaydedilmesi fonksiyonu
-func (s *CurrencyService) SaveCurrencyToDatabase() {
+// CurrencySave fonksiyonu döviz kurlarını API'den çekerek database'e kaydeder.
+func (s *currencyService) CurrencySave() {
 	url := "https://api.freecurrencyapi.com/v1/latest?apikey=fca_live_u0sYK4DYWBJTH2FqyODV5rGrvhFcxGnKgSymXi5a&currencies=USD%2CEUR%2CGBP%2CPLN%2CRUB%2CJPY%2CKRW&base_currency=TRY"
 
 	response, err := http.Get(url)
@@ -103,7 +111,8 @@ func (s *CurrencyService) SaveCurrencyToDatabase() {
 	}
 }
 
-func (s *CurrencyService) CurrencyConvertor() {
+// CurrencyConvertor fonksiyonu döviz kurlarını TL'ye çevirir.
+func (s *currencyService) CurrencyConvertor() {
 	var existingCurrency model.Currency
 	if err := database.Conn.First(&existingCurrency).Error; err != nil {
 		log.Fatal(err)
@@ -125,7 +134,8 @@ func (s *CurrencyService) CurrencyConvertor() {
 	}
 }
 
-func (s *CurrencyService) CurrencyHandler(c *fiber.Ctx) error {
+// CurrencyHandler fonksiyonu döviz kurlarını döndürür.
+func (s *currencyService) CurrencyHandler(c *fiber.Ctx) error {
 	currency := model.Currency{}
 	if err := database.Conn.First(&currency).Error; err != nil {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
