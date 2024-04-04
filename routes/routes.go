@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"Currency/service"
+	"Currency/pkg"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -9,8 +9,8 @@ import (
 )
 
 func apiRoutes(app *fiber.App) {
-	tokenService := service.NewTokenService()
-	currencyService := service.NewCurrencyService()
+	tokenService := pkg.NewTokenService()
+	currencyService := pkg.NewCurrencyService()
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
@@ -23,14 +23,17 @@ func apiRoutes(app *fiber.App) {
 		return c.SendString("Hello from Currency API! This is only for my personal use.")
 	})
 
-	app.Use(tokenService.Check)
+	app.Use(func(c *fiber.Ctx) error {
+		return tokenService.Check(c)
+	})
+
 	app.Get("/token/create", tokenService.Generate)
 	app.Get("/token/list", tokenService.List)
 	app.Get("/currency", currencyService.CurrencyHandler)
 }
 
 func websocketHandler(app *fiber.App) {
-	currencyService := service.NewCurrencyService()
+	currencyService := pkg.NewCurrencyService()
 
 	app.Use("/ws", func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
@@ -42,7 +45,7 @@ func websocketHandler(app *fiber.App) {
 
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
 		if c.Locals("allowed") == true {
-			if err := currencyService.WSSaveCurrencyToDatabase(c); err != nil {
+			if err := currencyService.Updater(c); err != nil {
 				c.Close()
 			}
 		}

@@ -1,4 +1,4 @@
-package service
+package pkg // import "Currency/pkg"
 
 import (
 	"Currency/database"
@@ -12,10 +12,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// TokenService interface'i token işlemleri için kullanılacak metodları içerir
 type TokenService interface {
-	Generate() (string, error)
-	List() ([]model.Token, error)
-	Check(c *fiber.Ctx, token string) error
+	Generate(c *fiber.Ctx) error
+	List(c *fiber.Ctx) error
+	Check(c *fiber.Ctx) error
 }
 
 type tokenService struct{}
@@ -25,24 +26,25 @@ func NewTokenService() TokenService {
 }
 
 // Generate methodu admin panelinde token oluşturmak için kullanılacak (büyük ihtimalle hiç bir zaman admin paneli olmayacak ama whatever...)
-func (ts *tokenService) Generate() (string, error) {
+func (ts *tokenService) Generate(c *fiber.Ctx) error {
 	token := tokenGenerator()
-	return token, nil
+	return c.SendString(token)
 }
 
 // List methodu admin panelinde tokenları listelemek için kullanılacak (büyük ihtimalle hiç bir zaman admin paneli olmayacak ama whatever...)
-func (ts *tokenService) List() ([]model.Token, error) {
+func (ts *tokenService) List(c *fiber.Ctx) error {
 	var tokens []model.Token
 	if err := database.Conn.Find(&tokens).Error; err != nil {
-		return nil, err
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Token listesi alınamadı",
+		})
 	}
-
-	return tokens, nil
+	return c.JSON(tokens)
 }
 
 // Check methodu middleware olarak kullanılacak
-func (ts *tokenService) Check(c *fiber.Ctx, token string) error {
-	token = c.Query("token")
+func (ts *tokenService) Check(c *fiber.Ctx) error {
+	token := c.Query("token")
 	if token == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Token not found",
